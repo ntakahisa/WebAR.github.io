@@ -17,7 +17,7 @@
             background-color: transparent; 
         }
 
-        /* 【新機能】縦画面のときに表示する横画面誘導オーバーレイ */
+        /* 縦画面時に表示される横画面誘導オーバーレイ */
         #rotate-alert {
             display: none;
             position: fixed;
@@ -180,7 +180,7 @@
             background: #cbd5e1;
         }
 
-        /* コンテンツ部分（開閉対象、横向きで最も美しく配置される2カラム） */
+        /* コンテンツ部分 */
         #ui-content {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -336,9 +336,9 @@
 
     <a-scene embedded arjs="sourceType: webcam; debugUIEnabled: false;" renderer="alpha: true; antialias: true;" vr-mode-ui="enabled: false">
         
-        <a-entity id="ar-world" position="0 -0.5 -1.5">
+        <a-entity id="ar-world" position="0 -0.5 -1.4" rotation="0 0 0">
             
-            <a-cylinder radius="0.015" height="0.3" color="#64748b" position="0 0 0"></a-cylinder>
+            <a-cylinder radius="0.015" height="0.4" color="#64748b" position="0 0 0"></a-cylinder>
             
             <a-ring id="orbit-ring" color="#ffffff" rotation="-90 0 0" radius-inner="0.99" radius-outer="1.01" opacity="0.8"></a-ring>
 
@@ -383,8 +383,7 @@
         const maxHistoryLen = 120;
 
         // トラッキング用ジャイロ制御変数
-        const lockedCameraRotation = new THREE.Euler();
-        const lockedCameraPosition = new THREE.Vector3();
+        const lockedCameraRotation = new THREE.Quaternion();
         const currentDeviceRotation = new THREE.Euler(0, 0, 0, 'YXZ');
 
         // UI関係DOM
@@ -432,12 +431,10 @@
         // --- 折りたたみ（縮小）制御イベント ---
         btnCollapse.addEventListener('click', () => {
             bottomUi.classList.toggle('collapsed');
-            
             if (bottomUi.classList.contains('collapsed')) {
                 btnCollapse.textContent = '開く ▼';
             } else {
                 btnCollapse.textContent = '閉じる ▲';
-                // 開いた瞬間にキャンバスサイズを再計算
                 setTimeout(resizeCanvas, 310); 
             }
         });
@@ -445,7 +442,6 @@
         // スマホのジャイロセンサー情報のリアルタイム受信処理
         window.addEventListener('deviceorientation', (event) => {
             if (event.alpha !== null && event.beta !== null && event.gamma !== null) {
-                // 通常のオイラー角マッピングに戻して計算を安定化
                 const alphaRad = THREE.MathUtils.degToRad(event.alpha);
                 const betaRad = THREE.MathUtils.degToRad(event.beta);
                 const gammaRad = THREE.MathUtils.degToRad(event.gamma);
@@ -454,23 +450,26 @@
             }
         }, true);
 
-        // --- タップによる「現実空間への完全固定＆解除」ロジック ---
+        // --- タップによる「目の前に完全固定＆解除」ロジックの修正 ---
         window.addEventListener('click', (e) => {
             if (e.target.closest('#bottom-ui') || e.target.closest('#data-panel') || e.target.closest('#view-controls')) return;
 
-            // iOS用センサー解放トリガー
+            // iOS等センサー解放用
             if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
                 DeviceOrientationEvent.requestPermission().catch(err => console.error(err));
             }
 
             if (!isLocked) {
-                lockedCameraRotation.copy(currentDeviceRotation);
-                lockedCameraPosition.set(0, 0, 0);
+                // 固定時のカメラの向きをクォータニオンとして記憶
+                const currentQ = new THREE.Quaternion().setFromEuler(currentDeviceRotation);
+                lockedCameraRotation.copy(currentQ);
 
-                arWorld.setAttribute('position', '0 -0.5 -1.4');
+                // 【バグ修正】タップした瞬間、オブジェクトが勝手に吹き飛ばないよう位置関係を目の前（1.4m）に維持する
+                arWorld.object3D.position.set(0, -0.5, -1.4);
+                arWorld.object3D.rotation.set(0, 0, 0);
                 
                 isLocked = true;
-                statusAlert.textContent = "📌 回転中心を完全固定しました！スマホを動かして近づいてみましょう (再タップで解除)";
+                statusAlert.textContent = "📌 回転中心をその場に完全固定しました！ (再タップで解除)";
                 statusAlert.classList.add('status-locked');
             } else {
                 isLocked = false;
@@ -479,25 +478,31 @@
             }
         });
 
-        // 毎フレーム走る、独自のカメラ・ワールド同期演算ループ
+        // 毎フレーム走る、カメラと世界の同期更新ループ
         function updateCameraTracking() {
             const cameraObj = mainCamera.object3D;
+            const currentQ = new THREE.Quaternion().setFromEuler(currentDeviceRotation);
 
             if (!isLocked) {
-                cameraObj.quaternion.setFromEuler(currentDeviceRotation);
-                arWorld.setAttribute('position', '0 -0.5 -1.4');
-                arWorld.setAttribute('rotation', '0 0 0');
+                // 通常時：カメラはデバイスの向きにそのまま従い、世界はカメラの正面に固定
+                cameraObj.quaternion.copy(currentQ);
+                arWorld.object3D.position.set(0, -0.5, -1.4);
+                arWorld.object3D.rotation.set(0, 0, 0);
             } else {
-                const diffRotation = new THREE.Quaternion();
-                const currentQ = new THREE.Quaternion().setFromEuler(currentDeviceRotation);
-                const lockedQ = new THREE.Quaternion().setFromEuler(lockedCameraRotation).invert();
-                
-                diffRotation.multiplyQuaternions(currentQ, lockedQ);
-                cameraObj.quaternion.copy(currentDeviceRotation);
+                // 固定時：カメラのみ動きを反映
+                cameraObj.quaternion.copy(currentQ);
 
+                // タップした時点のカメラ姿勢と、現在の姿勢の差分を求める
+                const diffQ = new THREE.Quaternion().multiplyQuaternions(currentQ, lockedCameraRotation.clone().invert());
+                
+                // 【バグ修正】固定した時の位置（目の前 1.4m先）を基準に、角度差分に応じた正しい位置に世界を投影
                 const baseWorldPos = new THREE.Vector3(0, -0.5, -1.4);
-                baseWorldPos.applyQuaternion(diffRotation);
+                baseWorldPos.applyQuaternion(diffQ);
                 arWorld.object3D.position.copy(baseWorldPos);
+                
+                // 世界自身の向きも逆回転させて、常に現実空間の同じ方向を向き続けるように補正
+                const invDiffQ = diffQ.clone().invert();
+                arWorld.object3D.quaternion.copy(invDiffQ);
             }
         }
 
@@ -523,14 +528,14 @@
             gR.querySelector('a-cylinder').setAttribute('height', r);
             gR.querySelector('a-cylinder').setAttribute('position', `${r / 2} 0 0`);
 
-            // 速度ベクトル
+            // 速度ベクトル（X-Z水平面に水平になるように制御）
             gV.setAttribute('position', `${r} 0 0`);
             const vLength = Math.max(v * 0.2, 0.15);
             gV.querySelector('a-cylinder').setAttribute('height', vLength);
             gV.querySelector('a-cylinder').setAttribute('position', `0 0 ${-vLength / 2}`);
             gV.querySelector('a-cone').setAttribute('position', `0 0 ${-vLength}`);
 
-            // 向心加速度ベクトル
+            // 向心加速度ベクトル（円の中心方向へ水平に伸びる）
             gA.setAttribute('position', `${r} 0 0`);
             const aLength = Math.max(ac * 0.1, 0.15);
             const cylinders = gA.querySelectorAll('a-cylinder');
@@ -574,6 +579,7 @@
         function createTrailPoint(x, z) {
             if (!showTrace) return;
             const p = document.createElement('a-sphere');
+            // Y軸を0に固定し、完全に水平面上でプロット
             p.setAttribute('position', `${x} 0 ${z}`);
             p.setAttribute('radius', '0.02');
             p.setAttribute('color', '#a5b4fc');
@@ -629,9 +635,11 @@
 
             if (isPlaying) {
                 theta += omega * dt;
+                // 反時計回りに水平面（Y軸まわり）を綺麗に回転
                 const degree = (theta * 180 / Math.PI) % 360;
                 rotator.setAttribute('rotation', `0 ${degree} 0`);
 
+                // X-Z水平座標の算出
                 const currentX = r * Math.cos(theta);
                 const currentZ = -r * Math.sin(theta);
 
