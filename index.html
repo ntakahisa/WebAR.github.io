@@ -2,84 +2,49 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
-    <title>等速円運動 WebAR教材（スキャンガイド付）</title>
-    
-    <script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
-    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
-    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>等速円運動 マーカーレスWebAR教材</title>
     <style>
         body {
             margin: 0;
             overflow: hidden;
             font-family: 'Helvetica Neue', Arial, sans-serif;
-            user-select: none;
         }
-
-        /* 画面中央の「マーカー読み取り枠」UI */
-        #scan-guide {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 260px;
-            height: 260px;
-            border: 4px dashed #00d2d3;
-            border-radius: 20px;
-            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.4); /* 周りを暗くして枠を強調 */
-            z-index: 5;
-            pointer-events: none;
-            display: flex;
-            flex-direction: column;
-            justify-content: flex-end;
-            align-items: center;
-            padding-bottom: 20px;
-            box-sizing: border-box;
-            transition: opacity 0.5s ease; /* フェードアウト用 */
-        }
-        #scan-text {
-            color: #00d2d3;
-            font-size: 14px;
-            font-weight: bold;
-            text-align: center;
-            background: rgba(0, 0, 0, 0.7);
-            padding: 6px 12px;
-            border-radius: 20px;
-            white-space: nowrap;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.5);
-        }
-
-        /* 数値表示パネル */
+        /* 画面上部の数値パネル */
         #data-panel {
             position: absolute;
             top: 20px;
-            left: 20px;
-            background: rgba(0, 0, 0, 0.75);
-            color: white;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 85%;
+            max-width: 350px;
+            background: rgba(0, 0, 0, 0.8);
+            color: #fff;
             padding: 12px;
-            border-radius: 8px;
-            font-size: 14px;
+            border-radius: 10px;
+            font-size: 13px;
+            line-height: 1.5;
             z-index: 10;
             pointer-events: none;
-            line-height: 1.6;
             font-family: monospace;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
         }
         .text-orange { color: #ff9f43; }
         .text-cyan { color: #00d2d3; }
         .text-red { color: #ff6b6b; }
 
-        /* 操作パネル */
+        /* 画面下部のコントロールUI */
         #ui-container {
             position: absolute;
             bottom: 20px;
             left: 50%;
             transform: translateX(-50%);
             width: 90%;
-            max-width: 400px;
+            max-width: 380px;
             background: rgba(255, 255, 255, 0.95);
             padding: 15px;
-            border-radius: 12px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            border-radius: 14px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
             z-index: 10;
             box-sizing: border-box;
         }
@@ -92,38 +57,51 @@
             flex: 1;
             padding: 10px;
             border: none;
-            border-radius: 6px;
+            border-radius: 8px;
             background-color: #007bff;
             color: white;
             font-weight: bold;
             font-size: 14px;
             cursor: pointer;
         }
-        button:active {
-            background-color: #0056b3;
-        }
+        button:active { background-color: #0056b3; }
         .slider-group {
             margin-bottom: 8px;
         }
         .slider-label {
             display: flex;
             justify-content: space-between;
-            font-size: 13px;
+            font-size: 12px;
             font-weight: bold;
             margin-bottom: 4px;
             color: #333;
         }
         input[type="range"] {
             width: 100%;
-            height: 6px;
+        }
+        /* AR開始ボタン（WebXR起動用） */
+        #ar-button {
+            position: absolute;
+            bottom: 220px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 12px 24px;
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 30px;
+            font-size: 16px;
+            font-weight: bold;
+            z-index: 20;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            cursor: pointer;
         }
     </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
 
-    <div id="scan-guide">
-        <div id="scan-text">Hiroマーカーをこの枠内に収めてください</div>
-    </div>
+    <button id="ar-button">ARを開始する</button>
 
     <div id="data-panel">
         <div>半径 r : <span id="val-r" class="text-orange">1.00</span> m</div>
@@ -154,98 +132,149 @@
         </div>
     </div>
 
-    <a-scene embedded arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono_matrix; matrixCodeType: 3x3;">
-        
-        <a-marker id="ar-marker" type="pattern" url="https://raw.githubusercontent.com/AR-js-org/AR.js/master/data/data/patt.hiro">
-            
-            <a-entity position="0 0.1 0">
-                
-                <a-grid attributes-to-copy="grid" static-body material="opacity: 0.15; gridColor: #ffffff"></a-grid>
+    <script type="module">
+        import { ARButton } from 'https://unpkg.com/three@0.128.0/examples/jsm/webxr/ARButton.js';
 
-                <a-ring id="orbit" color="#ffffff" rotation="-90 0 0" radius-inner="0.98" radius-outer="1.02" opacity="0.7"></a-ring>
+        let container;
+        let camera, scene, renderer;
+        let controller;
 
-                <a-entity id="rotator" rotation="0 0 0">
-                    
-                    <a-sphere id="ball" position="1 0 0" radius="0.08" color="#ffffff"></a-sphere>
+        let reticle; // タップ位置を示すリング（照準）
+        let hitTestSource = null;
+        let hitTestSourceRequested = false;
 
-                    <a-entity id="container-r">
-                        <a-cylinder id="vec-r" color="#ff9f43" radius="0.015" rotation="0 0 90"></a-cylinder>
-                    </a-entity>
+        // 物理シミュレーション用のグループ（タップした場所に置く）
+        let arGroup = null; 
+        let orbitRing, ball, vecR, vecV, vecA;
+        let arrowHelperV, arrowHelperA; // 矢印オブジェクト
 
-                    <a-entity id="container-v">
-                        <a-cylinder id="vec-v" color="#00d2d3" radius="0.015" rotation="90 0 0"></a-cylinder>
-                    </a-entity>
-
-                    <a-entity id="container-a">
-                        <a-cylinder id="vec-a" color="#ff6b6b" radius="0.015" rotation="0 0 90"></a-cylinder>
-                    </a-entity>
-                    
-                </a-entity>
-            </a-entity>
-
-        </a-marker>
-        
-        <a-entity camera></a-entity>
-    </a-scene>
-
-    <script>
-        // --- 物理パラメータ ---
-        let r = 1.0;
+        // 物理パラメータ
+        let r = 0.5; // 初期半径（AR空間で大きすぎないように小さめにスタート）
         let omega = 1.5;
         let theta = 0;
         let isPlaying = true;
+        const scaleFactor = 0.2; // 矢印の見た目のスケール
 
-        // --- DOM要素 ---
-        const scanGuide = document.getElementById('scan-guide');
-        const arMarker = document.getElementById('ar-marker');
-
+        // DOM
         const sliderR = document.getElementById('slider-r');
         const sliderOmega = document.getElementById('slider-omega');
         const labelR = document.getElementById('label-r');
         const labelOmega = document.getElementById('label-omega');
-        
         const valR = document.getElementById('val-r');
         const valOmega = document.getElementById('val-omega');
         const valV = document.getElementById('val-v');
         const valAc = document.getElementById('val-ac');
         const valT = document.getElementById('val-t');
-
         const btnPlayPause = document.getElementById('btn-play-pause');
         const btnReset = document.getElementById('btn-reset');
 
-        // --- 3D要素 ---
-        const orbit = document.getElementById('orbit');
-        const rotator = document.getElementById('rotator');
-        const ball = document.getElementById('ball');
-        
-        const vecR = document.getElementById('vec-r');
-        const vecV = document.getElementById('vec-v');
-        const vecA = document.getElementById('vec-a');
-        
-        const containerR = document.getElementById('container-r');
-        const containerV = document.getElementById('container-v');
-        const containerA = document.getElementById('container-a');
+        init();
+        animate();
 
-        const scaleFactor = 0.35; // ベクトルの大きさ調整用
+        function init() {
+            container = document.createElement('div');
+            document.body.appendChild(container);
 
-        // --- マーカー検知時のUI表示切り替え ---
-        // マーカーが見つかったら読み取り枠をスッと消す
-        arMarker.addEventListener('markerFound', () => {
-            scanGuide.style.opacity = '0';
-        });
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
 
-        // マーカーを見失ったら読み取り枠を再度表示する
-        arMarker.addEventListener('markerLost', () => {
-            scanGuide.style.opacity = '1';
-        });
+            // 光源
+            const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
+            light.position.set(0.5, 1, 0.25);
+            scene.add(light);
 
-        // --- 物理演算・3Dモデル更新 ---
+            // レンダラー設定
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.xr.enabled = true;
+            container.appendChild(renderer.domElement);
+
+            // ARButtonを有効化
+            const arButton = ARButton.createButton(renderer, { requiredFeatures: ['local-floor', 'hit-test'] });
+            document.body.appendChild(arButton);
+            
+            // デフォルトのボタンは隠して自作の緑ボタンで発火させる
+            arButton.style.display = 'none';
+            document.getElementById('ar-button').addEventListener('click', () => {
+                arButton.click();
+                document.getElementById('ar-button').style.display = 'none';
+            });
+
+            // 1. 平面を検出した時に出す「位置決め用サークル（レティクル）」
+            const geometry = new THREE.RingGeometry(0.1, 0.11, 32).rotateX(-Math.PI / 2);
+            const material = new THREE.MeshBasicMaterial({ color: 0x00d2d3 });
+            reticle = new THREE.Mesh(geometry, material);
+            reticle.matrixAutoUpdate = false;
+            reticle.visible = false;
+            scene.add(reticle);
+
+            // --- 2. 円運動モデルの土台を作成 ---
+            arGroup = new THREE.Group();
+            arGroup.visible = false; // 最初は非表示、タップで配置
+            scene.add(arGroup);
+
+            // 軌道リング
+            const ringGeo = new THREE.RingGeometry(0.49, 0.51, 64).rotateX(-Math.PI / 2);
+            const ringMat = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, opacity: 0.7, transparent: true });
+            orbitRing = new THREE.Mesh(ringGeo, ringMat);
+            arGroup.add(orbitRing);
+
+            // 運動する物体（球）
+            const sphereGeo = new THREE.SphereGeometry(0.04, 32, 32);
+            const sphereMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3 });
+            ball = new THREE.Mesh(sphereGeo, sphereMat);
+            arGroup.add(ball);
+
+            // 半径ベクトル（太さのあるシリンダー）
+            const cylinderGeo = new THREE.CylinderGeometry(0.006, 0.006, 1, 8).rotateZ(Math.PI / 2);
+            const materialR = new THREE.MeshBasicMaterial({ color: 0xff9f43 });
+            vecR = new THREE.Mesh(cylinderGeo, materialR);
+            arGroup.add(vecR);
+
+            // 速度ベクトル（矢印）
+            const dirV = new THREE.Vector3(0, 0, -1);
+            arrowHelperV = new THREE.ArrowHelper(dirV, new THREE.Vector3(), 0.2, 0x00d2d3, 0.05, 0.02);
+            arGroup.add(arrowHelperV);
+
+            // 向心加速度ベクトル（矢印）
+            const dirA = new THREE.Vector3(-1, 0, 0);
+            arrowHelperA = new THREE.ArrowHelper(dirA, new THREE.Vector3(), 0.2, 0xff6b6b, 0.05, 0.02);
+            arGroup.add(arrowHelperA);
+
+            // UI同期
+            updatePhysics();
+
+            // 画面タップで、照準（レティクル）の位置に円運動を配置
+            controller = renderer.xr.getController(0);
+            controller.addEventListener('select', onSelect);
+            scene.add(controller);
+
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        function onSelect() {
+            if (reticle.visible) {
+                // レティクルの位置と向きを円運動の回転中心として設定！
+                arGroup.position.setFromMatrixPosition(reticle.matrix);
+                arGroup.quaternion.setFromRotationMatrix(reticle.matrix);
+                arGroup.visible = true; // 出現させる
+            }
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // --- 物理更新ロジック ---
         function updatePhysics() {
             const v = r * omega;
             const ac = r * omega * omega;
             const T = (2 * Math.PI) / omega;
 
-            // パネル数値更新
+            // UI数値更新
             valR.textContent = r.toFixed(2);
             valOmega.textContent = omega.toFixed(2);
             valV.textContent = v.toFixed(2);
@@ -255,27 +284,28 @@
             labelR.textContent = r.toFixed(2);
             labelOmega.textContent = omega.toFixed(2);
 
-            // 3Dモデル更新
-            orbit.setAttribute('radius-inner', (r - 0.02).toFixed(3));
-            orbit.setAttribute('radius-outer', (r + 0.02).toFixed(3));
-            ball.setAttribute('position', `${r} 0 0`);
+            if (!arGroup) return;
 
-            // 半径ベクトル
-            vecR.setAttribute('height', r);
-            containerR.setAttribute('position', `${r / 2} 0 0`);
+            // 3Dモデル形状変更
+            // 軌道の変更
+            orbitRing.scale.set(r / 0.5, 1, r / 0.5);
 
-            // 速度ベクトル
+            // 小球の基準距離
+            ball.position.set(r, 0, 0);
+
+            // 半径ベクトルの伸縮と配置
+            vecR.scale.set(r, 1, 1);
+            vecR.position.set(r / 2, 0, 0);
+
+            // ベクトルの長さ（スケール調整）
             const vLen = Math.max(v * scaleFactor, 0.05);
-            vecV.setAttribute('height', vLen);
-            containerV.setAttribute('position', `${r} 0 ${-vLen / 2}`);
-
-            // 向心加速度ベクトル
             const aLen = Math.max(ac * scaleFactor, 0.05);
-            vecA.setAttribute('height', aLen);
-            containerA.setAttribute('position', `${r - (aLen / 2)} 0 0`);
+
+            arrowHelperV.setLength(vLen, 0.03, 0.015);
+            arrowHelperA.setLength(aLen, 0.03, 0.015);
         }
 
-        // --- イベントリスナー設定 ---
+        // --- スライダー操作等 ---
         sliderR.addEventListener('input', (e) => {
             r = parseFloat(e.target.value);
             updatePhysics();
@@ -293,32 +323,80 @@
 
         btnReset.addEventListener('click', () => {
             theta = 0;
-            rotator.setAttribute('rotation', '0 0 0');
             if (!isPlaying) {
                 isPlaying = true;
                 btnPlayPause.textContent = "一時停止";
             }
         });
 
-        // --- アニメーションループ ---
-        let lastTime = 0;
-        function animate(time) {
-            requestAnimationFrame(animate);
-
-            if (!lastTime) lastTime = time;
-            const dt = (time - lastTime) / 1000;
-            lastTime = time;
-
-            if (isPlaying) {
-                theta += omega * dt;
-                const degree = (theta * 180 / Math.PI) % 360;
-                rotator.setAttribute('rotation', `0 ${degree} 0`);
-            }
+        // --- ループ処理 ---
+        function animate() {
+            renderer.setAnimationLoop(render);
         }
 
-        // 初期化実行
-        updatePhysics();
-        requestAnimationFrame(animate);
+        let lastTime = 0;
+        function render(timestamp, frame) {
+            if (!lastTime) lastTime = timestamp;
+            const dt = (timestamp - lastTime) / 1000;
+            lastTime = timestamp;
+
+            // AR用の平面・照準（ヒットテスト）処理
+            if (frame) {
+                const referenceSpace = renderer.xr.getReferenceSpace();
+                const session = renderer.xr.getSession();
+
+                if (hitTestSourceRequested === false) {
+                    session.requestReferenceSpace('viewer').then(function (referenceSpace) {
+                        session.requestHitTestSource({ space: referenceSpace }).then(function (source) {
+                            hitTestSource = source;
+                        });
+                    });
+                    session.addEventListener('end', function () {
+                        hitTestSourceRequested = false;
+                        hitTestSource = null;
+                    });
+                    hitTestSourceRequested = true;
+                }
+
+                if (hitTestSource) {
+                    const hitTestResults = frame.getHitTestResults(hitTestSource);
+                    if (hitTestResults.length) {
+                        const hit = hitTestResults[0];
+                        reticle.visible = true;
+                        reticle.matrix.fromArray(hit.getPose(referenceSpace).transform.matrix);
+                    } else {
+                        reticle.visible = false;
+                    }
+                }
+            }
+
+            // 円運動のアニメーション
+            if (isPlaying && arGroup.visible) {
+                theta += omega * dt;
+
+                // 物体（球）を周回させる
+                const x = r * Math.cos(theta);
+                const z = r * Math.sin(theta);
+                ball.position.set(x, 0, z);
+
+                // 半径ベクトルを小球に合わせて回転
+                vecR.rotation.y = -theta;
+                vecR.position.set(x / 2, 0, z / 2);
+
+                // 速度ベクトル（接線方向：現在の小球の位置から直角方向に伸ばす）
+                arrowHelperV.position.set(x, 0, z);
+                // 接線方向のベクトルは (-sin(θ), 0, cos(θ))
+                const dirV = new THREE.Vector3(-Math.sin(theta), 0, Math.cos(theta));
+                arrowHelperV.setDirection(dirV);
+
+                // 向心加速度ベクトル（小球位置から中心 (0,0,0) の方向へ伸ばす）
+                arrowHelperA.position.set(x, 0, z);
+                const dirA = new THREE.Vector3(-Math.cos(theta), 0, -Math.sin(theta));
+                arrowHelperA.setDirection(dirA);
+            }
+
+            renderer.render(scene, camera);
+        }
     </script>
 </body>
 </html>
