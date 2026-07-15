@@ -9,8 +9,11 @@
     <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
     
     <style>
-        body {
+        html, body {
             margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
             overflow: hidden;
             font-family: 'Helvetica Neue', Arial, sans-serif;
             user-select: none;
@@ -110,7 +113,7 @@
             border: none;
         }
 
-        /* 右側コントロールエリア（数値パネルと全画面ボタン） */
+        /* 右側コントロールエリア */
         #right-controls {
             position: absolute;
             top: 20px;
@@ -268,7 +271,15 @@
         .graph-canvas-wrapper { background: #f8f9fa; border: 1px solid #ddd; border-radius: 6px; height: 90px; }
         canvas { width: 100%; height: 100%; }
 
-        a-scene { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+        #ar-scene-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+        a-scene { width: 100%; height: 100%; }
     </style>
 </head>
 <body>
@@ -337,46 +348,48 @@
         </div>
     </div>
 
-    <a-scene embedded arjs="sourceType: webcam; debugUIEnabled: false;" renderer="alpha: true; antialias: true;" vr-mode-ui="enabled: false">
-        
-        <a-marker type="pattern" url="https://raw.githack.com/AR-js-org/AR.js/master/data/data/patt.hiro" id="ar-marker"></a-marker>
+    <div id="ar-scene-container">
+        <a-scene embedded arjs="sourceType: webcam; debugUIEnabled: false;" renderer="alpha: true; antialias: true; colorManagement: true;" vr-mode-ui="enabled: false">
             
-        <a-entity id="ar-world" visible="false">
-            <a-entity id="floating-stage" position="0 0.3 0">
+            <a-marker type="pattern" url="https://raw.githack.com/AR-js-org/AR.js/master/data/data/patt.hiro" id="ar-marker"></a-marker>
                 
-                <a-cylinder radius="0.015" height="0.3" color="#64748b" position="0 -0.15 0"></a-cylinder>
-                <a-cone radius-bottom="0.04" radius-top="0.015" height="0.05" color="#475569" position="0 -0.3 0"></a-cone>
-                
-                <a-ring id="orbit-ring" color="#ffffff" rotation="-90 0 0" radius-inner="0.99" radius-outer="1.01" opacity="0.8"></a-ring>
+            <a-entity id="ar-world" visible="false">
+                <a-entity id="floating-stage" position="0 0.3 0">
+                    
+                    <a-cylinder radius="0.015" height="0.3" color="#64748b" position="0 -0.15 0"></a-cylinder>
+                    <a-cone radius-bottom="0.04" radius-top="0.015" height="0.05" color="#475569" position="0 -0.3 0"></a-cone>
+                    
+                    <a-ring id="orbit-ring" color="#ffffff" rotation="-90 0 0" radius-inner="0.99" radius-outer="1.01" opacity="0.8"></a-ring>
 
-                <a-entity id="trail-container"></a-entity>
+                    <a-entity id="trail-container"></a-entity>
 
-                <a-entity id="rotator" rotation="0 0 0">
-                    <a-sphere id="physics-ball" position="1 0 0" radius="0.06" color="#ffffff"></a-sphere>
+                    <a-entity id="rotator" rotation="0 0 0">
+                        <a-sphere id="physics-ball" position="1 0 0" radius="0.06" color="#ffffff"></a-sphere>
 
-                    <a-entity id="group-v-r">
-                        <a-cylinder color="#ff9f43" radius="0.01" height="1" rotation="0 0 90" position="0.5 0 0"></a-cylinder>
+                        <a-entity id="group-v-r">
+                            <a-cylinder color="#ff9f43" radius="0.01" height="1" rotation="0 0 90" position="0.5 0 0"></a-cylinder>
+                        </a-entity>
+
+                        <a-entity id="group-v-v" position="1 0 0">
+                            <a-cone color="#00d2d3" radius-bottom="0.025" radius-top="0" height="0.12" rotation="90 0 0" position="0 0 -0.4"></a-cone>
+                            <a-cylinder color="#00d2d3" radius="0.008" height="0.4" rotation="90 0 0" position="0 0 -0.2"></a-cylinder>
+                            <a-text value="v" color="#00d2d3" scale="0.35 0.35 0.35" position="0 0.12 -0.25" rotation="-30 0 0"></a-text>
+                        </a-entity>
+
+                        <a-entity id="group-v-a" position="1 0 0">
+                            <a-cone color="#ff6b6b" radius-bottom="0.025" radius-top="0" height="0.12" rotation="0 0 90" position="-0.4 0 0"></a-cone>
+                            <a-cylinder color="#ff6b6b" radius="0.008" height="0.1" rotation="0 0 90" position="-0.08 0 0"></a-cylinder>
+                            <a-cylinder color="#ff6b6b" radius="0.008" height="0.1" rotation="0 0 90" position="-0.26 0 0"></a-cylinder>
+                            <a-text value="a_c" color="#ff6b6b" scale="0.35 0.35 0.35" position="-0.25 0.12 0" rotation="-30 0 0"></a-text>
+                        </a-entity>
                     </a-entity>
-
-                    <a-entity id="group-v-v" position="1 0 0">
-                        <a-cone color="#00d2d3" radius-bottom="0.025" radius-top="0" height="0.12" rotation="90 0 0" position="0 0 -0.4"></a-cone>
-                        <a-cylinder color="#00d2d3" radius="0.008" height="0.4" rotation="90 0 0" position="0 0 -0.2"></a-cylinder>
-                        <a-text value="v" color="#00d2d3" scale="0.35 0.35 0.35" position="0 0.12 -0.25" rotation="-30 0 0"></a-text>
-                    </a-entity>
-
-                    <a-entity id="group-v-a" position="1 0 0">
-                        <a-cone color="#ff6b6b" radius-bottom="0.025" radius-top="0" height="0.12" rotation="0 0 90" position="-0.4 0 0"></a-cone>
-                        <a-cylinder color="#ff6b6b" radius="0.008" height="0.1" rotation="0 0 90" position="-0.08 0 0"></a-cylinder>
-                        <a-cylinder color="#ff6b6b" radius="0.008" height="0.1" rotation="0 0 90" position="-0.26 0 0"></a-cylinder>
-                        <a-text value="a_c" color="#ff6b6b" scale="0.35 0.35 0.35" position="-0.25 0.12 0" rotation="-30 0 0"></a-text>
-                    </a-entity>
+                    
                 </a-entity>
-                
             </a-entity>
-        </a-entity>
 
-        <a-entity id="main-camera" camera></a-entity>
-    </a-scene>
+            <a-entity id="main-camera" camera look-controls="enabled: false"></a-entity>
+        </a-scene>
+    </div>
 
     <script>
         let r = 1.00;
@@ -385,11 +398,17 @@
         let isPlaying = true;
         let showR = true, showV = true, showA = true, showTrace = true;
         
-        // 空間ロック追従用ステート変数
+        // 空間ロック追従用の高度な数学処理変数
         let isLocked = false;
-        const savedPosition = new THREE.Vector3();
-        const savedQuaternion = new THREE.Quaternion();
-        const savedScale = new THREE.Vector3();
+        const markerPos = new THREE.Vector3();
+        const markerQuat = new THREE.Quaternion();
+        const markerScale = new THREE.Vector3();
+        
+        // カメラ相対管理用
+        const camPos = new THREE.Vector3();
+        const camQuat = new THREE.Quaternion();
+        const relPos = new THREE.Vector3();
+        const relQuat = new THREE.Quaternion();
 
         const xHistory = [];
         const maxHistoryLen = 120;
@@ -400,6 +419,7 @@
         const scanReticle = document.getElementById('scan-reticle');
         const statusAlert = document.getElementById('status-alert');
         const btnFullscreen = document.getElementById('btn-fullscreen');
+        const sceneContainer = document.getElementById('ar-scene-container');
 
         const sldR = document.getElementById('sld-r');
         const sldOmega = document.getElementById('sld-omega');
@@ -427,6 +447,7 @@
         const gR = document.getElementById('group-v-r');
         const gV = document.getElementById('group-v-v');
         const gA = document.getElementById('group-v-a');
+        const mainCamera = document.getElementById('main-camera');
 
         // Canvas初期化
         const canvas = document.getElementById('graphCanvas');
@@ -448,13 +469,14 @@
             }
         });
 
-        // 【新規】全画面切り替えイベントロジック
+        // 【修正】AR.jsと高確率で競合しないコンテナ全画面化処理
         btnFullscreen.addEventListener('click', () => {
             if (!document.fullscreenElement) {
-                document.documentElement.requestFullscreen().then(() => {
+                sceneContainer.requestFullscreen().then(() => {
                     btnFullscreen.textContent = "❌ 全画面解除";
                 }).catch(err => {
-                    alert(`全画面表示の起動に失敗しました: ${err.message}`);
+                    // 失敗した場合はbody全体のフルスクリーンをフォールバック試行
+                    document.documentElement.requestFullscreen();
                 });
             } else {
                 document.exitFullscreen().then(() => {
@@ -463,12 +485,11 @@
             }
         });
 
-        // 外部の全画面解除動作（Escキーなど）とUIの整合性を取る
         document.addEventListener('fullscreenchange', () => {
             if (!document.fullscreenElement) {
                 btnFullscreen.textContent = "🖥️ 全画面表示";
             }
-            setTimeout(resizeCanvas, 100);
+            setTimeout(resizeCanvas, 200);
         });
 
         // 画面タップでロックをリセットして再スキャン可能にする機構
@@ -483,19 +504,28 @@
             }
         });
 
-        // マーカー認識時のロック制御
+        // マーカー認識時のロック制御（回転軸のブレを解消する厳密な算出）
         marker.addEventListener('markerFound', () => {
             if (!isLocked) {
                 marker.object3D.updateMatrixWorld();
-                marker.object3D.matrixWorld.decompose(savedPosition, savedQuaternion, savedScale);
+                mainCamera.object3D.updateMatrixWorld();
                 
-                arWorld.object3D.position.copy(savedPosition);
-                arWorld.object3D.quaternion.copy(savedQuaternion);
+                // マーカーの正確なトランスフォーム情報をクォータニオン分解で取得
+                marker.object3D.matrixWorld.decompose(markerPos, markerQuat, markerScale);
+                mainCamera.object3D.matrixWorld.decompose(camPos, camQuat, markerScale);
+
+                // カメラから見たマーカーの相対位置・回転を保存
+                relPos.copy(markerPos).sub(camPos).applyQuaternion(camQuat.clone().invert());
+                relQuat.copy(camQuat.clone().invert()).multiply(markerQuat);
+                
+                // 回転ステージを水平（垂直なY軸）に完全に補正固定する
+                arWorld.object3D.position.copy(markerPos);
+                arWorld.object3D.quaternion.copy(markerQuat);
                 
                 isLocked = true;
                 arWorld.setAttribute('visible', 'true');
                 scanReticle.classList.add('detected');
-                statusAlert.textContent = "🟢 空間固定成功！カメラを外しても見続けられます（タップでリセット）";
+                statusAlert.textContent = "🟢 空間固定成功！周り込んで観察できます（タップで再設定）";
                 statusAlert.classList.add('status-locked');
             }
         });
@@ -611,11 +641,29 @@
             const dt = (time - lastTime) / 1000;
             lastTime = time;
 
-            if (isLocked && marker.visible) {
-                marker.object3D.updateMatrixWorld();
-                marker.object3D.matrixWorld.decompose(savedPosition, savedQuaternion, savedScale);
-                arWorld.object3D.position.lerp(savedPosition, 0.1); 
-                arWorld.object3D.quaternion.slerp(savedQuaternion, 0.1);
+            if (isLocked) {
+                mainCamera.object3D.updateMatrixWorld();
+                mainCamera.object3D.matrixWorld.decompose(camPos, camQuat, markerScale);
+
+                if (marker.visible) {
+                    // マーカーが見えている間は、高精度なトラッキングで位置ブレを滑らかに補正（Lerp）
+                    marker.object3D.updateMatrixWorld();
+                    marker.object3D.matrixWorld.decompose(markerPos, markerQuat, markerScale);
+                    
+                    arWorld.object3D.position.lerp(markerPos, 0.15);
+                    arWorld.object3D.quaternion.slerp(markerQuat, 0.15);
+
+                    // 最新の相対位置関係をバックアップ更新
+                    relPos.copy(markerPos).sub(camPos).applyQuaternion(camQuat.clone().invert());
+                    relQuat.copy(camQuat.clone().invert()).multiply(markerQuat);
+                } else {
+                    // 【画期的修正】マーカーが外れた後：スマホのデバイスジャイロの動き（視点変更）に合わせて物体の位置を逆計算して引き留める
+                    const globalTargetPos = relPos.clone().applyQuaternion(camQuat).add(camPos);
+                    const globalTargetQuat = camQuat.clone().multiply(relQuat);
+
+                    arWorld.object3D.position.lerp(globalTargetPos, 0.2);
+                    arWorld.object3D.quaternion.slerp(globalTargetQuat, 0.2);
+                }
             }
 
             if (isPlaying && isLocked) {
