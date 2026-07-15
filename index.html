@@ -110,25 +110,50 @@
             border: none;
         }
 
-        /* 数値表示パネル（右上） */
-        #data-panel {
+        /* 右側コントロールエリア（数値パネルと全画面ボタン） */
+        #right-controls {
             position: absolute;
             top: 20px;
             right: 20px;
+            z-index: 90;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            width: 170px;
+        }
+
+        /* 数値表示パネル */
+        #data-panel {
             background: rgba(0, 0, 0, 0.75);
             color: white;
             padding: 12px;
             border-radius: 8px;
             font-size: 13px;
-            z-index: 90;
             pointer-events: none;
             line-height: 1.6;
             font-family: monospace;
-            width: 170px;
         }
         .text-orange { color: #ff9f43; font-weight: bold; }
         .text-cyan { color: #00d2d3; font-weight: bold; }
         .text-red { color: #ff6b6b; font-weight: bold; }
+
+        /* 全画面表示ボタン */
+        #btn-fullscreen {
+            background: rgba(15, 23, 42, 0.9);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            text-align: center;
+            transition: background 0.2s;
+        }
+        #btn-fullscreen:active {
+            background: rgba(51, 65, 85, 0.9);
+        }
 
         /* 左側操作チェックボックス */
         #view-controls {
@@ -260,7 +285,7 @@
         <div id="scan-reticle"></div>
     </div>
 
-    <div id="status-alert">🔍 物体を固定する位置を枠内に収めて平面を認識してください</div>
+    <div id="status-alert">🔍 マーカーを中央の枠内に収めて平面を認識してください</div>
 
     <div id="view-controls">
         <label class="control-item"><input type="checkbox" id="chk-r" checked> 半径ベクトル (橙)</label>
@@ -269,12 +294,15 @@
         <label class="control-item"><input type="checkbox" id="chk-trace" checked> 運動の軌跡（光）</label>
     </div>
 
-    <div id="data-panel">
-        <div>半径 r: <span id="val-r" class="text-orange">1.00</span> m</div>
-        <div>角速度 ω: <span id="val-omega" class="text-orange">2.00</span> rad/s</div>
-        <div>速度 v: <span id="val-v" class="text-cyan">2.00</span> m/s</div>
-        <div>向心加速度 a_c: <span id="val-ac" class="text-red">4.00</span> m/s²</div>
-        <div>周期 T: <span id="val-t">3.14</span> s</div>
+    <div id="right-controls">
+        <div id="data-panel">
+            <div>半径 r: <span id="val-r" class="text-orange">1.00</span> m</div>
+            <div>角速度 ω: <span id="val-omega" class="text-orange">2.00</span> rad/s</div>
+            <div>速度 v: <span id="val-v" class="text-cyan">2.00</span> m/s</div>
+            <div>向心加速度 a_c: <span id="val-ac" class="text-red">4.00</span> m/s²</div>
+            <div>周期 T: <span id="val-t">3.14</span> s</div>
+        </div>
+        <div id="btn-fullscreen">🖥️ 全画面表示</div>
     </div>
 
     <div id="bottom-ui">
@@ -311,8 +339,9 @@
 
     <a-scene embedded arjs="sourceType: webcam; debugUIEnabled: false;" renderer="alpha: true; antialias: true;" vr-mode-ui="enabled: false">
         
-        <a-marker type="pattern" url="https://raw.githack.com/AR-js-org/AR.js/master/data/data/patt.hiro" id="ar-marker">
+        <a-marker type="pattern" url="https://raw.githack.com/AR-js-org/AR.js/master/data/data/patt.hiro" id="ar-marker"></a-marker>
             
+        <a-entity id="ar-world" visible="false">
             <a-entity id="floating-stage" position="0 0.3 0">
                 
                 <a-cylinder radius="0.015" height="0.3" color="#64748b" position="0 -0.15 0"></a-cylinder>
@@ -344,9 +373,9 @@
                 </a-entity>
                 
             </a-entity>
-        </a-marker>
+        </a-entity>
 
-        <a-entity camera></a-entity>
+        <a-entity id="main-camera" camera></a-entity>
     </a-scene>
 
     <script>
@@ -356,6 +385,12 @@
         let isPlaying = true;
         let showR = true, showV = true, showA = true, showTrace = true;
         
+        // 空間ロック追従用ステート変数
+        let isLocked = false;
+        const savedPosition = new THREE.Vector3();
+        const savedQuaternion = new THREE.Quaternion();
+        const savedScale = new THREE.Vector3();
+
         const xHistory = [];
         const maxHistoryLen = 120;
 
@@ -364,6 +399,7 @@
         const btnCollapse = document.getElementById('btn-collapse');
         const scanReticle = document.getElementById('scan-reticle');
         const statusAlert = document.getElementById('status-alert');
+        const btnFullscreen = document.getElementById('btn-fullscreen');
 
         const sldR = document.getElementById('sld-r');
         const sldOmega = document.getElementById('sld-omega');
@@ -383,6 +419,7 @@
 
         // 3DオブジェクトDOM
         const marker = document.getElementById('ar-marker');
+        const arWorld = document.getElementById('ar-world');
         const rotator = document.getElementById('rotator');
         const ball = document.getElementById('physics-ball');
         const orbitRing = document.getElementById('orbit-ring');
@@ -411,17 +448,56 @@
             }
         });
 
-        // 平面認識状態を検知してUIを黄緑に点灯させるイベント制御
-        marker.addEventListener('markerFound', () => {
-            scanReticle.classList.add('detected');
-            statusAlert.textContent = "🟢 平面認識成功！30cm上に回転体を固定しました";
-            statusAlert.classList.add('status-locked');
+        // 【新規】全画面切り替えイベントロジック
+        btnFullscreen.addEventListener('click', () => {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().then(() => {
+                    btnFullscreen.textContent = "❌ 全画面解除";
+                }).catch(err => {
+                    alert(`全画面表示の起動に失敗しました: ${err.message}`);
+                });
+            } else {
+                document.exitFullscreen().then(() => {
+                    btnFullscreen.textContent = "🖥️ 全画面表示";
+                });
+            }
         });
 
-        marker.addEventListener('markerLost', () => {
-            scanReticle.classList.remove('detected');
-            statusAlert.textContent = "🔍 物体を固定する位置を枠内に収めて平面を認識してください";
-            statusAlert.classList.remove('status-locked');
+        // 外部の全画面解除動作（Escキーなど）とUIの整合性を取る
+        document.addEventListener('fullscreenchange', () => {
+            if (!document.fullscreenElement) {
+                btnFullscreen.textContent = "🖥️ 全画面表示";
+            }
+            setTimeout(resizeCanvas, 100);
+        });
+
+        // 画面タップでロックをリセットして再スキャン可能にする機構
+        window.addEventListener('click', (e) => {
+            if (e.target.closest('#bottom-ui') || e.target.closest('#right-controls') || e.target.closest('#view-controls')) return;
+            if (isLocked) {
+                isLocked = false;
+                arWorld.setAttribute('visible', 'false');
+                scanReticle.classList.remove('detected');
+                statusAlert.textContent = "🔍 マーカーを中央の枠内に収めて平面を認識してください";
+                statusAlert.classList.remove('status-locked');
+            }
+        });
+
+        // マーカー認識時のロック制御
+        marker.addEventListener('markerFound', () => {
+            if (!isLocked) {
+                marker.object3D.updateMatrixWorld();
+                marker.object3D.matrixWorld.decompose(savedPosition, savedQuaternion, savedScale);
+                
+                arWorld.object3D.position.copy(savedPosition);
+                arWorld.object3D.quaternion.copy(savedQuaternion);
+                
+                isLocked = true;
+                arWorld.setAttribute('visible', 'true');
+                scanReticle.classList.add('detected');
+                statusAlert.textContent = "🟢 空間固定成功！カメラを外しても見続けられます（タップでリセット）";
+                statusAlert.classList.add('status-locked');
+            }
         });
 
         // 物理パラメータ更新ロジック
@@ -535,7 +611,14 @@
             const dt = (time - lastTime) / 1000;
             lastTime = time;
 
-            if (isPlaying && marker.visible) {
+            if (isLocked && marker.visible) {
+                marker.object3D.updateMatrixWorld();
+                marker.object3D.matrixWorld.decompose(savedPosition, savedQuaternion, savedScale);
+                arWorld.object3D.position.lerp(savedPosition, 0.1); 
+                arWorld.object3D.quaternion.slerp(savedQuaternion, 0.1);
+            }
+
+            if (isPlaying && isLocked) {
                 theta += omega * dt;
                 const degree = (theta * 180 / Math.PI) % 360;
                 rotator.setAttribute('rotation', `0 ${degree} 0`);
