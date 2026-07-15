@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
-    <title>等速円運動 マーカー完全固定AR教材（縦画面・全画面カメラ修正版）</title>
+    <title>等速円運動 マーカー完全固定AR教材</title>
     
     <script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
     <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
@@ -20,7 +20,7 @@
             background-color: transparent; 
         }
 
-        /* AR.jsが生成するvideoタグを全画面表示時にも最背面に維持するための強制設定 */
+        /* 全画面表示時にも背面のカメラ映像を絶対に見失わないようにする設定 */
         video {
             position: absolute;
             top: 0;
@@ -355,9 +355,9 @@
     </div>
 
     <div id="ar-scene-container">
-        <a-scene embedded arjs="sourceType: webcam; debugUIEnabled: false;" renderer="alpha: true; antialias: true; colorManagement: true;" vr-mode-ui="enabled: false">
+        <a-scene embedded arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix; matrixCodeType: 3x3;" renderer="alpha: true; antialias: true; colorManagement: true;" vr-mode-ui="enabled: false">
             
-            <a-marker type="pattern" url="https://raw.githack.com/AR-js-org/AR.js/master/data/data/patt.hiro" id="ar-marker">
+            <a-marker type="pattern" url="https://raw.githack.com/AR-js-org/AR.js/master/data/data/patt.hiro" id="ar-marker" smooth="false" smoothCount="0">
                 <a-entity id="marker-anchor"></a-entity>
             </a-marker>
                 
@@ -406,7 +406,7 @@
         let isPlaying = true;
         let showR = true, showV = true, showA = true, showTrace = true;
         
-        // 【数理修正】Hiroマーカーのローカル姿勢空間を完全ロックするための行列・ベクトル群
+        // 厳密な位置追従ベクトル計算
         let isLocked = false;
         const markerPos = new THREE.Vector3();
         const markerQuat = new THREE.Quaternion();
@@ -486,7 +486,7 @@
         panelHeader.addEventListener('click', toggleDataPanel);
         btnPanelToggle.addEventListener('click', (e) => { e.stopPropagation(); toggleDataPanel(); });
 
-        // 【修正】カメラ映像をロストさせないよう、body全体をフルスクリーン化するロジックに変更
+        // カメラ映像をフルスクリーン時も維持するため、body全体をフルスクリーン化
         btnFullscreen.addEventListener('click', () => {
             if (!document.fullscreenElement) {
                 document.documentElement.requestFullscreen().then(() => {
@@ -504,7 +504,7 @@
             setTimeout(resizeCanvas, 200);
         });
 
-        // 画面タップでロックをリセット
+        // 画面タップでロックを解除して再スキャンモードへ
         window.addEventListener('click', (e) => {
             if (e.target.closest('#bottom-ui') || e.target.closest('#right-controls') || e.target.closest('#view-controls')) return;
             if (isLocked) {
@@ -520,35 +520,35 @@
             }
         });
 
-        // マーカー認識時のロック制御（Hiroマーカーの中心・傾きを完全にキャプチャ）
+        // マーカー認識時のロック制御
         marker.addEventListener('markerFound', () => {
             if (!isLocked) {
                 marker.object3D.updateMatrixWorld();
                 mainCamera.object3D.updateMatrixWorld();
                 
-                // Hiroマーカーの世界座標・回転・スケールを完全分解取得
+                // Hiroマーカーの物理中心位置・回転姿勢を正確にキャプチャ
                 marker.object3D.matrixWorld.decompose(markerPos, markerQuat, markerScale);
                 mainCamera.object3D.matrixWorld.decompose(camPos, camQuat, markerScale);
 
-                // カメラから見た【Hiroマーカーの相対位置と回転の正確な差分】を厳密に保存
+                // カメラ座標から見た「マーカー中心の正確な差分距離と角度（相対行列値）」を計算してロック
                 relPos.copy(markerPos).sub(camPos).applyQuaternion(camQuat.clone().invert());
                 relQuat.copy(camQuat.clone().invert()).multiply(markerQuat);
                 
-                // マーカーの中心を原点として世界のトランスフォームを完全に同期
+                // 回転物体の原点をマーカー位置に完全にセット
                 arWorld.object3D.position.copy(markerPos);
                 arWorld.object3D.quaternion.copy(markerQuat);
                 
                 isLocked = true;
                 arWorld.setAttribute('visible', 'true');
                 
-                // スキャンUIと案内バナーを完全隠蔽
+                // UI消去
                 scanContainer.style.opacity = '0';
                 statusAlert.style.opacity = '0';
                 statusAlert.style.transform = 'translateX(-50%) translateY(-20px)';
             }
         });
 
-        // 物理パラメータ計算
+        // 物理パラメータ更新
         function updatePhysics() {
             const v = r * omega;
             const ac = r * omega * omega;
@@ -662,24 +662,24 @@
                 mainCamera.object3D.updateMatrixWorld();
                 mainCamera.object3D.matrixWorld.decompose(camPos, camQuat, markerScale);
 
+                // カメラの写りからリアルタイムで位置検出できる場合は、マーカーの生座標に絶対同期
                 if (marker.visible) {
-                    // マーカーを視認できている時は、Hiroマーカーのリアルタイムな絶対座標系に強制同期
                     marker.object3D.updateMatrixWorld();
                     marker.object3D.matrixWorld.decompose(markerPos, markerQuat, markerScale);
                     
-                    arWorld.object3D.position.lerp(markerPos, 0.2);
-                    arWorld.object3D.quaternion.slerp(markerQuat, 0.2);
+                    arWorld.object3D.position.copy(markerPos);
+                    arWorld.object3D.quaternion.copy(markerQuat);
 
-                    // 最新の相対距離・回転角関係を常にバックアップ
+                    // 最新の相対姿勢を随時バックアップ
                     relPos.copy(markerPos).sub(camPos).applyQuaternion(camQuat.clone().invert());
                     relQuat.copy(camQuat.clone().invert()).multiply(markerQuat);
                 } else {
-                    // 【厳密修正】マーカーを見失った後：画面中央ではなく、保存した「Hiroマーカーがあった絶対空間」にオブジェクトを引き留める
+                    // マーカーを見失った後は、最後に見えていた「紙（マーカー）があった仮想の絶対空間」に正確に留め置く
                     const globalTargetPos = relPos.clone().applyQuaternion(camQuat).add(camPos);
                     const globalTargetQuat = camQuat.clone().multiply(relQuat);
 
-                    arWorld.object3D.position.lerp(globalTargetPos, 0.2);
-                    arWorld.object3D.quaternion.slerp(globalTargetQuat, 0.2);
+                    arWorld.object3D.position.copy(globalTargetPos);
+                    arWorld.object3D.quaternion.copy(globalTargetQuat);
                 }
             }
 
